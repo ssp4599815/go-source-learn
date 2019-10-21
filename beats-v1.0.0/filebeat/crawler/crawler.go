@@ -32,7 +32,7 @@ func (crawler *Crawler) Start(files []config.ProspectorConfig, eventChan chan *i
 			registrar:        crawler.Registrar, // 每一个要持久化的 registrar 信息
 		}
 
-		// 对每一个要收集的日志文件，来初始化一个 prospector
+		// 对每一个要收集的日志文件，来初始化一个 prospector，并初始化配置信息
 		err := prospector.Init()
 		if err != nil {
 			fmt.Printf("Error in initing prospector: %s", err)
@@ -41,6 +41,7 @@ func (crawler *Crawler) Start(files []config.ProspectorConfig, eventChan chan *i
 
 		// 每一个 prospector 启动一个 gorotion，并将读取到的日志 放到 eventChan 通道中，publisher会从 eventChan 中读取 fileevents
 		go prospector.Run(eventChan)
+		// 记录启动的 prospecter的个数
 		pendingProspectorCnt++
 	}
 }

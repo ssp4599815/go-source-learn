@@ -31,10 +31,12 @@ type FileEvent struct {
 
 // 文件的状态信息
 type FileState struct {
-	Source *string // 源地址，也就是 日志文件的地址
-	Offset int64   // 读取文件的偏移量
+	Source      *string // 源地址，也就是 日志文件的地址
+	Offset      int64   // 读取文件的偏移量
+	FileStateOS *FileStateOS
 }
 
+// 检查一个文件是否是一个规则的文件
 // Check that the file isn't a symlink, mode is regular or file is nil
 func (f *File) IsRegularFile() bool {
 	if f.File == nil {
@@ -52,4 +54,20 @@ func (f *File) IsRegularFile() bool {
 		return false
 	}
 	return true
+}
+
+// Check if the two files are the same
+func (f1 *File) IsSameFile(f2 *File) bool {
+	return os.SameFile(f1.FileInfo, f2.FileInfo)
+}
+
+// 检查给定的两个文件是否使用了同一个文件描述符
+// IsSameFile checks if the given File path corresponds with the FileInfo given
+func IsSameFile(path string, info os.FileInfo) bool {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		fmt.Printf("Error during file comparison: %s with %s - Error: %s", path, info.Name(), err)
+		return false
+	}
+	return os.SameFile(fileInfo, info)
 }

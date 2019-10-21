@@ -74,21 +74,21 @@ func newLineReader(input io.Reader, codec encoding.Encoding, bufferSize int) (*l
 
 // 初始化一个 lineReader
 func (l *lineReader) init(input io.Reader, codec encoding.Encoding, bufferSize int) error {
-	l.rawInput = input        // input reader 对象
+	l.rawInput = input        // input reader 对象,就是要去读的文件的对象
 	l.codec = codec           // 文件的编码格式
 	l.bufferSize = bufferSize // 缓冲区大小
 
 	l.codec.NewEncoder() // 创建一个新的 encoder 编码器
-	// TODO： xxx
+	// 将文件进行编码，并返回编码后的结果
 	nl, _, err := transform.Bytes(l.codec.NewEncoder(), []byte{'\n'})
 	if err != nil {
 		return err
 	}
 
-	l.nl = nl                        // TODO： xxx
+	l.nl = nl                        // 编码后的文档
 	l.decoder = l.codec.NewDecoder() // 创建一个解码器
-	l.inBuffer = streambuf.New(nil)  // TODO： xxx
-	l.outBuffer = streambuf.New(nil) // TODO: xxx
+	l.inBuffer = streambuf.New(nil)  // 创建一个输入文件的缓冲区
+	l.outBuffer = streambuf.New(nil) // 创建一个输出文件的缓冲区
 	return nil
 }
 
@@ -99,7 +99,26 @@ func (l *lineReader) next() ([]byte, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
+
+		// check last decoded byte really being '\n'
+		buf := l.outBuffer.Bytes()
+		if buf[len(buf)-1] == '\n' { // 检查 是否已经读取到了文件的末尾
+			break
+		}
 	}
+
+	// output buffer contains complate line ending with '\n' . Extaract
+	// byte slice from buffer and reset output buffer
+	bytes, err := l.outBuffer.Collect(l.outBuffer.Len())
+	l.outBuffer.Reset()
+	if err != nil {
+		panic(err)
+	}
+
+	// return and reset consumeed bytes count
+	sz := l.byteCount
+	l.byteCount = 0
+	return bytes, sz, nil
 }
 
 func (l *lineReader) advance() error {

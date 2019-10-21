@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// 创建一个新的 harvester
+// 创建一个新的 harvester,用来收集日志，并将收集到的日志 发动到 spooler 中
 func NewHarvester(prospectorCfg config.ProspectorConfig, cfg *config.HarvesterConfig, path string, signal chan int64, spooler chan *input.FileEvent) (*Harvester, error) {
 	// 获取日志的编码格式， utf-8 gbk....
 	encoding, ok := findEncoding(cfg.Encoding)
@@ -16,13 +16,14 @@ func NewHarvester(prospectorCfg config.ProspectorConfig, cfg *config.HarvesterCo
 		return nil, fmt.Errorf("unknown encoding('%v')", cfg.Encoding)
 	}
 
+	// 初始化一个 harvester
 	h := &Harvester{
-		Path:             path, // 要收集的日志文件路径
-		ProspectorConfig: prospectorCfg,
-		Config:           cfg,
-		FinishChan:       signal, // 接受关闭的信号的通道
-		SpoolerChan:      spooler,
-		encoding:         encoding,
+		Path:             path,          // 要收集的日志文件路径
+		ProspectorConfig: prospectorCfg, // prospector 配置
+		Config:           cfg,           // Harvester 配置
+		FinishChan:       signal,        // 接受关闭的信号的通道
+		SpoolerChan:      spooler,       // 将收集到的日志放到 spooler 中
+		encoding:         encoding,      // 文件的编码格式
 		backoff:          prospectorCfg.Harvester.BackoffDuration,
 	}
 	return h, nil
@@ -40,7 +41,7 @@ func (h *Harvester) Harvest() {
 		// 一旦完成，将当时文件的偏移量保存下来，使得重启后能读取到同样的文件位置
 		h.FinishChan <- h.Offset
 		// Make sure file is closed as soon as harvester exits
-		h.file.Close()
+		_ = h.file.Close()
 	}()
 
 	if err != nil {
@@ -61,8 +62,10 @@ func (h *Harvester) Harvest() {
 	h.initOffset()
 
 	// 最近一次从 底层 reader (h.file) 读取字节的时间
+	// timeIn 实现了 io.Reader() 接口，可以使用 timeIn.Read() 来去读文件 h.file
 	timeIn := newTimedReader(h.file)
 
+	// 创建一个 新的 LineReader 对象
 	reader, err := newLineReader(timeIn, h.encoding, h.Config.BufferSize)
 	if err != nil {
 		fmt.Printf("Stop Harvesting. Unexpected Error: %s", err)
@@ -132,11 +135,12 @@ func (h *Harvester) Harvest() {
 	}
 }
 
+// 初始化 要读取文件的偏移量
 // initOffset finds the current offset of the file and sets it in the harvester as postition
 func (h *Harvester) initOffset() {
 	// 获取文件的偏移量
 	// get current offset in file
-	offset, _ := h.file.Seek(0, io.SeekCurrent)
+	offset, _ := h.file.Seek(0, io.SeekCurrent) // 获取当前位置的偏移量
 
 	if h.Offset > 0 {
 		fmt.Printf("harvester, harvest: %q position: %d (offset snapshot: %d)", h.Path, h.Offset, offset)
@@ -145,7 +149,7 @@ func (h *Harvester) initOffset() {
 	} else {
 		fmt.Printf("harvester, harvest: %q (offset snapshot:%d)", h.Path, offset)
 	}
-	h.Offset = offset
+	h.Offset = offset // 将当前文件的偏移量 复制到  harvester.Offset 中,后面再读取的时候会使用
 }
 
 // 公共函数

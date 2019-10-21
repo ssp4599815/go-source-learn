@@ -84,3 +84,64 @@ func (r *Registrar) LoadState() {
 func (r *Registrar) Stop() {
 
 }
+
+// 获取文件的状态 offset
+// - 如果是老文件 就返回当前文件的 lastState
+// - 如果是新文件，就返回 0
+func (r *Registrar) fetchState(filePath string, fileInfo os.FileInfo) (int64, bool) {
+	// check if there is a state for this file
+	lastState, isFound := r.GetFileState(filePath)
+
+	if isFound && input.IsSameFile(filePath, fileInfo) {
+		fmt.Println("registar, Same file as before found, Fetch the state and persist it.")
+		// We're resuming - throw the last state back downstaream so wo resave it
+		// And retuen the offset - also force harvest in case the file is old and we're about to skip it
+		r.Persist <- lastState
+		return lastState.Offset, true
+	}
+
+	if previous, err := r.getPreviousFile(filePath, fileInfo); err != nil {
+		// File has rotated betewwn shutdown and startup
+		// We return last state downstream, with a modified event source with the new file name
+		// And return the offset - also force harvest in case the file is old and we're about to skip it
+		fmt.Printf("Detected rename of a previously harvested file: %s -> %s", previous, filePath)
+
+		lastState, _ := r.GetFileState(previous)
+		lastState.Source = &filePath
+		r.Persist <- lastState
+		return lastState.Offset, true
+	}
+
+	if isFound {
+		fmt.Println("Not resuming rotated file: ", filePath)
+	}
+	// New file so just start from an automatic position
+	return 0, false
+}
+
+func (r *Registrar) GetFileState(path string) (*FileState, bool) {
+	state, exist := r.State[path]
+	return state, exist
+}
+
+// 核查 registrar  是否一个新文件已经存在了，只是使用了不同的名称（也就是使用了同一个文件描述符）
+// 一旦一个老的文件被发现了，就直接返回该文件，如果不是就返回错误
+// getPreviousFile checks in the registrar if there is the newFile already exist with a different name
+// In case an old file is found, the path to the file is retuened, if not, an error is returned
+func (r *Registrar) getPreviousFile(newFilePath string, newFileInfo os.FileInfo) (string, error) {
+	newState := input.GetOSFileState(&newFileInfo)
+	for oldFilePath, oldState := range r.State {
+
+		// skipping when path the same
+		if oldFilePath == newFilePath {
+			continue
+		}
+
+		// Compare states
+		if newState.IsSame(oldState.FileStateOS) {
+			fmt.Printf("Old file with new name found: %s is no %s", oldFilePath, newFilePath)
+			return oldFilePath, nil
+		}
+	}
+	return "", fmt.Errorf("No previous file found")
+}

@@ -3,6 +3,7 @@ package streambuf
 import (
 	"bytes"
 	"errors"
+	"fmt"
 )
 
 // Parse operation failed cause of buffer snapped short + buffer is fixed
@@ -77,18 +78,73 @@ func (b *Buffer) Bytes() []byte {
 }
 
 func (b *Buffer) Write(p []byte) (int, error) {
-	err := b.doAppend(p,false)
+	err := b.doAppend(p, false)
 	if err != nil {
-		return 0,b.ioErr()
+		return 0, b.ioErr()
 	}
 }
 
+// Collect tries to collect count bytes from the buffer and updates the read
+// pointers. If the buffer is in failed state or count bytes are not avaliable
+// an error will be returned.
+func (b *Buffer) Collect(count int) ([]byte, error) {
+	if b.Failed() {
+		return nil, b.err
+	}
 
+	if !b.Avail(count) {
+		return nil, b.bufferEndError()
+	}
+
+	data := b.data[b.mark : b.mark+count]
+	err := b.Advance(count)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// Failed returns true if buffer is in failed state. If buffer is in failed
+// state. almost all buffer operations will fail
+func (b *Buffer) Failed() bool {
+	failed := b.err != nil
+	if failed {
+		fmt.Println("streambuf, buf parser already failed with: ", b.err)
+	}
+	return failed
+}
+
+// Avail checks if count bytes are avaliable for reading from the buffer
+func (b *Buffer) Avail(count int) bool {
+	return count <= b.avaliable
+}
+
+func (b *Buffer) bufferEndError() error {
+	if b.fixed {
+		return b.SetError(ErrUnexpectedEOB)
+	} else {
+		return b.SetError(ErrNoMoreBytes)
+	}
+}
+
+// Advance will advance the buffers read pointer by count bytes. Returns
+// ErrNoMoreBytes or ErrUnexpectedEOB if count bytes are not avaliable
+func (b *Buffer) Advance(count int) error {
+	if !b.Avail(count) {
+		return b.bufferEndError()
+	}
+	b.mark += count
+	b.offset = b.mark
+	b.avaliable -= count
+	return nil
+}
+
+// 创建一个 新的 可扩展的 缓冲区
 // New creates new extensible buffer from data slice being retained by the buffer
 func New(data []byte) *Buffer {
 	return &Buffer{
-		data:      data,
-		fixed:     false,
-		avaliable: len(data),
+		data:      data,      // 缓冲区里面存的文档
+		fixed:     false,     // 是否需要一个固定的缓冲区
+		avaliable: len(data), // 可用缓冲区大小
 	}
 }
