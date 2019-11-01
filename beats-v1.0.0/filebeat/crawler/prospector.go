@@ -144,14 +144,17 @@ func (p *Prospector) Run(spoolChan chan *input.FileEvent) {
 		}
 	}
 
+	// 最后一次检查文件的时间
 	// Seed last scan time
 	p.lastscan = time.Now()
 
+	// 现在让我们做一个快速扫描来获取新文件
 	// Now let's do one quick scan to pick up new files
 	for _, path := range p.ProspectorConfig.Paths {
 		p.scan(path, spoolChan)
 	}
 
+	// 这一次我们不再考虑以前的状态
 	// This singnial we finished considering the previous state
 	event := &input.FileState{
 		Source: nil,
@@ -189,6 +192,7 @@ func (p *Prospector) Run(spoolChan chan *input.FileEvent) {
 // For all found files it is checked if a harvester should be started
 func (p *Prospector) scan(path string, output chan *input.FileEvent) {
 	fmt.Println("prospector,scan path ", path)
+	// 获取path 下面的所有文件
 	// Evaluate（评估） the path as a wildcards(通配符)/shell glob
 	matches, err := filepath.Glob(path)
 	if err != nil {
@@ -202,6 +206,7 @@ func (p *Prospector) scan(path string, output chan *input.FileEvent) {
 	for _, file := range matches {
 		fmt.Println("prospector, Check file for harvesting: ", file)
 
+		// 获取要收集日志文件的状态
 		// Stat the file, following any symlinks
 		fileinfo, err := os.Stat(file)
 		if err != nil {

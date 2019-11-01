@@ -4,8 +4,21 @@ import (
 	"fmt"
 	"github.com/ssp4599815/beat/filebeat/config"
 	"github.com/ssp4599815/beat/filebeat/input"
+	"log"
 	"os"
 )
+
+/*
+ The hierarchy for the crawler objects is explained as following
+
+ Crawler: Filebeat has one crawler（只有一个crawler）. The crawler is the single point of control
+ 	and stores the state. The state is written through the registrar
+ Prospector: For every FileConfig the crawler starts a prospector (针对每个 FIleConfig 启动一个)
+ Harvester: For every file found inside the FileConfig, the Prospector starts a Harvester (针对每个文件启动给一个)
+ 		The harvester send their events to the spooler
+ 		The spooler sends the event to the publisher
+ 		The publisher writes the state down with the registrar
+*/
 
 // 负责具体的日志收集工作
 type Crawler struct {
@@ -44,4 +57,32 @@ func (crawler *Crawler) Start(files []config.ProspectorConfig, eventChan chan *i
 		// 记录启动的 prospecter的个数
 		pendingProspectorCnt++
 	}
+
+	// Now determine which states we need to persist by pulling the events from the prospectors
+	// When we hit a nil source a prospector had finished so we decrease the expected events
+	log.Printf("prospector, Waiting for %d prospector to initialise", pendingProspectorCnt)
+
+	// 从通道中 获取要持久化的文件信息
+	for event := range crawler.Registrar.Persist {
+		// 如果日志文件为空
+		if event.Source == nil {
+			pendingProspectorCnt--
+			// 如果要监听的日志文件为空，也就是没有要收集的日志了
+			if pendingProspectorCnt == 0 {
+				log.Printf("prospector, No pending prospectors.Finishing setup")
+				break
+			}
+			continue
+		}
+		crawler.Registrar.State[*event.Source] = event
+		log.Println("prospector, Registrar will re-save state for", *event.Source)
+
+		// 如果 crawler 已经不再运行了，就退出
+		if !crawler.running {
+			break
+		}
+	}
+}
+func (crawler *Crawler) Stop() {
+	// TODO: Properly stop prospectors and harvesters
 }

@@ -9,3 +9,8 @@ type ShipperConfig struct {
 	Tags                []string
 	// Geoip 根据ip获取地址位置
 }
+
+type publishOptions struct {
+	confirm bool
+	sync    bool
+}

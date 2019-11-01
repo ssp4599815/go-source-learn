@@ -92,6 +92,7 @@ func (l *lineReader) init(input io.Reader, codec encoding.Encoding, bufferSize i
 	return nil
 }
 
+// 读取下一行文件
 func (l *lineReader) next() ([]byte, int, error) {
 	for {
 		// read next 'potential'（潜在的） line from input buffer/reader

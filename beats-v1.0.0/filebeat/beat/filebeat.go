@@ -2,6 +2,8 @@ package beat
 
 import (
 	"fmt"
+	"github.com/ssp4599815/beat/libbeat/common"
+	"github.com/ssp4599815/beat/libbeat/publisher"
 	"os"
 
 	"github.com/ssp4599815/beat/libbeat/beat"
@@ -14,7 +16,7 @@ import (
 
 // Filebeat 定义一个 filebeat 所需要的信息
 type Filebeat struct {
-	FbConfig      *cfg.Config       // filebeat 配置文件
+	FbConfig      *cfg.Config       // filebeat 配置文件, 定义在最上面，下面的所有都可以进行接收。
 	publisherChan chan []*FileEvent // 是一个channel， 把从 harvesters 读取到的日志发送到 spooler
 	Spooler       *Spooler          // 把从 通道里读取日志缓存起来，等待 publisher来拉取
 	registrar     *Registrar        // 记录每次读取文件的状态信息
@@ -138,9 +140,9 @@ func Publish(beat *beat.Beat, fb *Filebeat) {
 
 		pubEvents := make([]common.MapStr, 0, len(events))
 		for _, event := range events {
-			pubEvents = append(pubEvents, events.ToMapStr())
+			pubEvents = append(pubEvents, event.ToMapStr())
 		}
-		beat.Events.PublishEvents(pubEvents, Publisher.Sync)
+		beat.Events.PublishEvents(pubEvents, publisher.Sync)
 
 		fmt.Println("Events sent: ", len(events))
 

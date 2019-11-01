@@ -1,10 +1,12 @@
 package harvester
 
 import (
+	"errors"
 	"fmt"
 	"github.com/ssp4599815/beat/filebeat/config"
 	"github.com/ssp4599815/beat/filebeat/input"
 	"io"
+	"os"
 	"time"
 )
 
@@ -84,6 +86,7 @@ func (h *Harvester) Harvest() {
 
 	for {
 		// 获取 读取到的文本，读取到文本的大小
+		// isPartial 用来判断读取的文件是不是一个完整的文件
 		text, bytesRead, isPartial, err := readLine(reader, &timeIn.lastReadTime, h.Config.PartialLineWatingDuration)
 
 		if err != nil {
@@ -135,6 +138,59 @@ func (h *Harvester) Harvest() {
 	}
 }
 
+// 打开 h.Path 下的文件，并获取该文件描述符给 h.file，然后设置 该文件 要读取的位置
+// open does open the files given under h.Path and assigns the file handler to h.file
+func (h *Harvester) open() error {
+	// 如果是 标准输入 这忽略
+	// Special handing that "-" means to read from standard input
+	if h.Path == "-" {
+		h.file = os.Stdin
+		return nil
+	}
+
+	for {
+		var err error
+		// 以只读的方式打开一个文件
+		h.file, err = input.ReadOpen(h.Path)
+
+		if err != nil {
+			// 如果打开失败，就 sleep 5秒后 继续打开文件，知道打开为止
+			// retry on failure
+			fmt.Printf("Failed opening %s: %s", h.Path, err)
+			time.Sleep(5 * time.Second)
+		} else {
+			break
+		}
+	}
+
+	// 将 该文件描述符 赋值给 input
+	file := &input.File{
+		File: h.file,
+	}
+
+	// 判断我们要收集的日志 是否是一个符合规则的 文件
+	// Check we are not following a rabbit hole (symlinks ,etc.)
+	if !file.IsRegularFile() {
+		return errors.New("Given file is not a regular file.")
+	}
+
+	// 设置 要读取文件的 offset ,是从文件的开头 还是结尾 还是其他情况
+	h.setFileOffset()
+
+	return nil
+}
+
+// set the offset of the file to the right place. Takes configuation options into account
+func (h *Harvester) setFileOffset() {
+	if h.Offset > 0 {
+		_, _ = h.file.Seek(h.Offset, io.SeekStart) // 如果 h.Offset 有记录的话，证明是重新启动后重新读取的该文件，需要从当前位置开始读
+	} else if h.Config.TailFiles {
+		_, _ = h.file.Seek(0, io.SeekEnd) // 如果是 tail file  的方式， 就从文件末尾开始读取文件
+	} else {
+		_, _ = h.file.Seek(0, io.SeekStart) // 都不是的话，就从文件的开头开始 ，把所有的文件内容都读取到
+	}
+}
+
 // 初始化 要读取文件的偏移量
 // initOffset finds the current offset of the file and sets it in the harvester as postition
 func (h *Harvester) initOffset() {
@@ -150,6 +206,13 @@ func (h *Harvester) initOffset() {
 		fmt.Printf("harvester, harvest: %q (offset snapshot:%d)", h.Path, offset)
 	}
 	h.Offset = offset // 将当前文件的偏移量 复制到  harvester.Offset 中,后面再读取的时候会使用
+}
+
+func (h *Harvester) handleReadlineError(lastReadTime time.Time, e error) error {
+	return nil
+}
+
+func (h *Harvester) Stop() {
 }
 
 // 公共函数

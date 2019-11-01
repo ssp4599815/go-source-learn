@@ -2,6 +2,7 @@ package input
 
 import (
 	"fmt"
+	"github.com/ssp4599815/beat/libbeat/common"
 	"os"
 	"time"
 )
@@ -34,6 +35,17 @@ type FileState struct {
 	Source      *string // 源地址，也就是 日志文件的地址
 	Offset      int64   // 读取文件的偏移量
 	FileStateOS *FileStateOS
+}
+
+func (f *FileEvent) SetFieldsUnderRoot(fieldsUnderRoot bool) {
+	f.fieldsUnderRoot = fieldsUnderRoot
+}
+
+func (f *FileEvent) ToMapStr() common.MapStr {
+	events := common.MapStr{
+
+	}
+	return events
 }
 
 // 检查一个文件是否是一个规则的文件

@@ -22,12 +22,13 @@ func NewSpooler(filebeat *Filebeat) *Spooler {
 		Filebeat: filebeat,
 		running:  false,
 	}
-	// 获取配置相关信息
+	// 获取配置相关信息，这个是从 前面传过来的。
 	config := &spooler.Filebeat.FbConfig.Filebeat
 
 	// 每隔多长时间刷新一次 spool, 然后将 spool 里面的数据 发送到 publisher
 	// Set the next flush time
 	spooler.nextFlushTime = time.Now().Add(config.IdleTimeoutDuration)
+	// 初始化一个通道，用来将接收到的信息传递到 s.Filebeat.publisherChan 中
 	spooler.Channel = make(chan *input.FileEvent, 16)
 
 	return spooler
@@ -70,6 +71,7 @@ func (s *Spooler) Config() error {
 // holding on to spooled events for too long
 func (s *Spooler) Run() {
 	// 获取配置信息
+	// TODO: 这个是怎么被初始化的 ？
 	config := &s.Filebeat.FbConfig.Filebeat
 
 	// 开始运行 spooler
@@ -125,8 +127,7 @@ func (s *Spooler) Stop() {
 
 // 将 spooler 中的 日志事件信息 发送到 publisher 通道中
 func (s *Spooler) flush() {
-	// 如果 有要发送的数据
-	// Checks if any new object
+	// 是否有新的数据要发送
 	if len(s.spool) > 0 {
 		// copy buffer
 		tmpCopy := make([]*input.FileEvent, len(s.spool))
