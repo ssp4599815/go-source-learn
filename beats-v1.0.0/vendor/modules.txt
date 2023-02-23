@@ -1,4 +1,4 @@
-# golang.org/x/text v0.3.2
+# golang.org/x/text v0.3.8
 golang.org/x/text/encoding
 golang.org/x/text/encoding/charmap
 golang.org/x/text/encoding/htmlindex
